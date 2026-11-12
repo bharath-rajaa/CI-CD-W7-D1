@@ -1,0 +1,21 @@
+{
+  "name": "ci-playwright-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright end-to-end sample suite wired into GitHub Actions, with failure triage and AI-assisted log review.",
+  "type": "module",
+  "engines": { "node": ">=18.18" },
+  "scripts": {
+    "app": "node scripts/serve.mjs",
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "report": "playwright show-report reports/html",
+    "classify": "node scripts/classify-failures.mjs",
+    "ai-review": "node scripts/ai-review.mjs reports/ci-log.txt"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^20.14.0",
+    "dotenv": "^16.4.5"
+  }
+}

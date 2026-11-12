@@ -1,0 +1,72 @@
+name: Playwright CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      inject_defect:
+        description: "Lab: run against the app with the controlled product defect"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Secrets arrive as environment variables. A secret that is not set becomes an empty
+      # string, which global setup reports as SETUP_ERROR.
+      TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+      APP_USERNAME: ${{ secrets.TEST_USERNAME }}
+      APP_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+      APP_VARIANT: ${{ inputs.inject_defect && 'defect' || 'stable' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p reports
+          npm test 2>&1 | tee reports/ci-log.txt
+
+      - name: Classify failures (setup vs product)
+        if: always()
+        run: node scripts/classify-failures.mjs
+
+      - name: AI review of CI log
+        if: failure()
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/ai-review.mjs reports/ci-log.txt
+
+      - name: Upload reports and failure artefacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
